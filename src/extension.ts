@@ -1,14 +1,12 @@
-
+const path = require('path');
 const expandTilde = require('expand-tilde');
-
 import * as vscode from 'vscode';
-import { gql } from '@apollo/client';
 import {
-	client,
-	// subscriberClient,
 	getSites,
 	startSite,
 	stopSite,
+	subscribeToInstantReloadStatusChange,
+	subscribeToInstantReloadFileChange,
 } from './graphqlClient';
 
 
@@ -18,24 +16,25 @@ interface SiteData {
 	path: string;
 }
 
+const getSiteShellConfig = (siteId: string) => {
+	const fileName = `${siteId}.sh`;
+	const pathPieces = [process.env.HOME];
 
-const createStartStopHandler = (config: {
-	siteId: string,
-	startMsg: string,
-	finishSuccessMsg: string,
-	finishFailMsg: string,
-	action: (siteId: string) => Promise<SiteData>,
-}) => async () => {
-	vscode.window.showInformationMessage(`Attempting to start LocalWP site ${config.siteId}`,);
-
-	const siteData = await config.action(config.siteId);
-	
-	let finishMessage = config.finishSuccessMsg;
-	if (!siteData) {
-		finishMessage = config.finishFailMsg;
+	switch(process.platform) {
+		case 'darwin':
+			pathPieces.push('Library', 'Application\ Support');
+			break;
+		case 'win32':
+			pathPieces.push('Roaming');
+			break;
+		default:
+			path.join('.config');
+			break;
 	}
 
-	vscode.window.showInformationMessage(finishMessage);
+	pathPieces.push('Local', 'ssh-entry', fileName);
+
+	return path.join(...pathPieces);
 };
 
 // this method is called when your extension is activated
@@ -57,8 +56,10 @@ export async function activate(context: vscode.ExtensionContext) {
 		return;
 	}
 
-	console.log('LocalWP site found. Registering commands...');
 
+	/**
+	 * Command to start a isite in Local
+	 */
 	let startSiteCmd = vscode.commands.registerCommand('localwp.startSite', async () => {
 		vscode.window.showInformationMessage(`Attempting to start LocalWP site ${currentSite.id}`,);
 
@@ -74,6 +75,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(startSiteCmd);
 
+	/**
+	 * Command to stop a site in Local
+	 */
 	let stopSiteCmd = vscode.commands.registerCommand('localwp.stopSite', async () => {
 		vscode.window.showInformationMessage(`Attempting to stop LocalWP site ${currentSite.id}`);
 
@@ -91,58 +95,33 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	const instantReloadChannel = vscode.window.createOutputChannel('LocalWP: Instant Reload');
 
-	try {
-		client.subscribe({
-			query: gql`
-				 subscription irStatusChange($siteId: ID!){
-  					instantReloadStatusChange(id: $siteId)
-				 }
-			`,
-			variables: {
-				siteId: currentSite.id,
-			},
-		}).subscribe({
-			// @ts-ignore
-			next: ({ data }) => {
-				instantReloadChannel.appendLine(data.instantReloadStatusChange);
-			},
-		});
+	subscribeToInstantReloadStatusChange(currentSite.id, ({ data }) => {
+		instantReloadChannel.appendLine(data.instantReloadStatusChange);
+	});
 
-		client.subscribe({
-			query: gql`
-				subscription irFileChange($siteId: ID!){
-					instantReloadFileChanged(id: $siteId){
-						file
-				    	eventType
-				    	timeChanged
-				    	fileSize
-				  	}
-				}
-			`,
-			variables: {
-				siteId: currentSite.id,
-			},
-		}).subscribe({
-			// @ts-ignore
-			next: ({ data }) => {
-				const { file, eventType, timeChanged, fileSize } = data.instantReloadFileChanged;
+	subscribeToInstantReloadFileChange(currentSite.id, ({ data }) => {
+		const { file, eventType, timeChanged, fileSize } = data.instantReloadFileChanged;
 
-				let verb = 'Changed';
-				let size = `(${fileSize})`;
+		let verb = 'Changed';
+		let size = `(${fileSize})`;
 
-				if (['unlink', 'unlinkDir'].includes(eventType)) {
-					verb = 'Deleted';
-					size = '';
-				} else if (['add', 'addDir'].includes(eventType)) {
-					verb = 'Added';
-				}
+		if (['unlink', 'unlinkDir'].includes(eventType)) {
+			verb = 'Deleted';
+			size = '';
+		} else if (['add', 'addDir'].includes(eventType)) {
+			verb = 'Added';
+		}
 
-				instantReloadChannel.appendLine(`[${timeChanged}] - ${verb} - ${file} ${size}`);
-			},
-		});
-	} catch(err) {
-		console.error(err);
-	}
+		instantReloadChannel.appendLine(`[${timeChanged}] - ${verb} - ${file} ${size}`);
+	});
+
+	/**
+	 * Create a terminal and load in the site's shell config
+	 */
+	vscode.window.createTerminal(
+		'LocalWP Site Shell',
+		getSiteShellConfig(currentSite.id),
+	);
 }
 
 // this method is called when your extension is deactivated

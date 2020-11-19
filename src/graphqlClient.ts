@@ -9,6 +9,8 @@ import { WebSocketLink } from '@apollo/client/link/ws';
 import { InMemoryCache } from '@apollo/client/cache';
 import { setContext } from '@apollo/client/link/context';
 
+type NextCB = (response: { data: any }) => void;
+
 function readGraphQLConfig() {
 	let config;
 	try {
@@ -69,16 +71,9 @@ const authLink = setContext((_, { headers }) => {
 	 authLink.concat(httpLink),
  );
 
-export const client = new ApolloClient({
+const client = new ApolloClient({
 	link: splitLink,
 	cache: new InMemoryCache(),
-	// request: async (operation) => {
-	// 	const accessToken = await this._getAccessToken();
-
-	// 	operation.setContext({
-	// 		headers: { Authorization: accessToken ? `Bearer ${accessToken}` : '' },
-	// 	});
-	// },
 	defaultOptions: {
 		watchQuery: {
 			fetchPolicy: 'cache-and-network',
@@ -119,6 +114,24 @@ const mutations = {
 	`,
 };
 
+const subscriptions = {
+	instantReloadStatusChange: gql`
+		 subscription instantReloadStatusChange($siteId: ID!){
+			  instantReloadStatusChange(id: $siteId)
+		 }
+	`,
+	instantReloadFileChange: gql`
+		subscription instantReloadFileChange($siteId: ID!){
+			instantReloadFileChanged(id: $siteId){
+				file
+		    	eventType
+		    	timeChanged
+		    	fileSize
+		  	}
+		}
+	`,
+};
+
 export const getSites = async () => {
 	const { data: { sites }} = await client.query({ query: queries.getSites });
 
@@ -150,3 +163,29 @@ export const stopSite = async (siteId: string) => {
 		console.error(err);
 	}
 };
+
+export const subscribeToInstantReloadStatusChange = (siteId: string, next: NextCB) => {
+	try {
+		client.subscribe({
+			query: subscriptions.instantReloadStatusChange,
+			variables: { siteId },
+		}).subscribe({
+			next,
+		});
+	} catch(err) {
+		console.error(err);
+	}
+};
+
+export const subscribeToInstantReloadFileChange = (siteId: string, next: NextCB) => {
+	try {
+		client.subscribe({
+			query: subscriptions.instantReloadFileChange,
+			variables: { siteId },
+		}).subscribe({
+			next,
+		});
+	} catch(err) {
+		console.error(err);
+	}
+}
