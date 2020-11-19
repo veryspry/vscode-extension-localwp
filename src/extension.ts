@@ -124,20 +124,26 @@ export async function activate(context: vscode.ExtensionContext) {
 	);
 
 	/**
-	 * Create a status bar button to start the site
-	 */
-	const startSiteButton = vscode.window.createStatusBarItem(2);
-	startSiteButton.text = 'Start LocalWP site';
-	startSiteButton.command = 'localwp.startSite';
-	startSiteButton.show();
-
-	/**
 	 * Create a status bar button to stop the site
 	 */
+	const stopSiteDescriptor = 'Stops the Local site if it isn\'t already stopped';
 	const stopSiteButton = vscode.window.createStatusBarItem(2);
 	stopSiteButton.text = 'Stop LocalWP site';
 	stopSiteButton.command = 'localwp.stopSite';
+	stopSiteButton.tooltip = stopSiteDescriptor;
+	stopSiteButton.accessibilityInformation = { label: stopSiteDescriptor };
 	stopSiteButton.show();
+
+	/**
+	 * Create a status bar button to start the site
+	 */
+	const startSiteDescriptor = 'Starts the Local site if it isn\'t already started';
+	const startSiteButton = vscode.window.createStatusBarItem(2);
+	startSiteButton.text = 'Start LocalWP site';
+	startSiteButton.command = 'localwp.startSite';
+	startSiteButton.tooltip = startSiteDescriptor;
+	startSiteButton.accessibilityInformation = { label: startSiteDescriptor };
+	startSiteButton.show();
 }
 
 // this method is called when your extension is deactivated
