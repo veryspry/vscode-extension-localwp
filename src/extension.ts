@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 import { gql } from '@apollo/client';
 import {
 	client,
+	// subscriberClient,
 	getSites,
 	startSite,
 	stopSite,
@@ -36,7 +37,6 @@ const createStartStopHandler = (config: {
 
 	vscode.window.showInformationMessage(finishMessage);
 };
-
 
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
@@ -92,33 +92,56 @@ export async function activate(context: vscode.ExtensionContext) {
 	const instantReloadChannel = vscode.window.createOutputChannel('LocalWP: Instant Reload');
 
 	try {
-
-		const res = await client.query({
+		client.subscribe({
 			query: gql`
-				query {
-					getInstantReloadStatus($siteId: ID!) {
-						getInstantReloadStatus(id: $siteId)
-					}
+				 subscription irStatusChange($siteId: ID!){
+  					instantReloadStatusChange(id: $siteId)
+				 }
+			`,
+			variables: {
+				siteId: currentSite.id,
+			},
+		}).subscribe({
+			// @ts-ignore
+			next: ({ data }) => {
+				instantReloadChannel.appendLine(data.instantReloadStatusChange);
+			},
+		});
+
+		client.subscribe({
+			query: gql`
+				subscription irFileChange($siteId: ID!){
+					instantReloadFileChanged(id: $siteId){
+						file
+				    	eventType
+				    	timeChanged
+				    	fileSize
+				  	}
 				}
 			`,
 			variables: {
 				siteId: currentSite.id,
-			}
-		});
-		// .subscribeToMore({
-		// 	document: gql` subscription instantReloadStatusChange {
- 	// 			instantReloadStatusChange {
-		// 			id
-		// 			status
-		// 		}
-		// 	}`,
-		// 	// variables:
-		// 	// UpdateQuery:
-		// });
+			},
+		}).subscribe({
+			// @ts-ignore
+			next: ({ data }) => {
+				const { file, eventType, timeChanged, fileSize } = data.instantReloadFileChanged;
 
-		console.log(res);
+				let verb = 'Changed';
+				let size = `(${fileSize})`;
+
+				if (['unlink', 'unlinkDir'].includes(eventType)) {
+					verb = 'Deleted';
+					size = '';
+				} else if (['add', 'addDir'].includes(eventType)) {
+					verb = 'Added';
+				}
+
+				instantReloadChannel.appendLine(`[${timeChanged}] - ${verb} - ${file} ${size}`);
+			},
+		});
 	} catch(err) {
-		console.error(err)
+		console.error(err);
 	}
 }
 
