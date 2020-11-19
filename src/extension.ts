@@ -122,6 +122,22 @@ export async function activate(context: vscode.ExtensionContext) {
 		'LocalWP Site Shell',
 		getSiteShellConfig(currentSite.id),
 	);
+
+	/**
+	 * Create a status bar button to start the site
+	 */
+	const startSiteButton = vscode.window.createStatusBarItem(2);
+	startSiteButton.text = 'Start LocalWP site';
+	startSiteButton.command = 'localwp.startSite';
+	startSiteButton.show();
+
+	/**
+	 * Create a status bar button to stop the site
+	 */
+	const stopSiteButton = vscode.window.createStatusBarItem(2);
+	stopSiteButton.text = 'Stop LocalWP site';
+	stopSiteButton.command = 'localwp.stopSite';
+	stopSiteButton.show();
 }
 
 // this method is called when your extension is deactivated
