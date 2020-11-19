@@ -188,4 +188,4 @@ export const subscribeToInstantReloadFileChange = (siteId: string, next: NextCB)
 	} catch(err) {
 		console.error(err);
 	}
-}
+};
